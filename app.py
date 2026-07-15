@@ -42,8 +42,24 @@ def latest_snapshot(df: pd.DataFrame) -> pd.DataFrame:
 master = load_master()
 
 # ---------- Header ----------
-st.title("AfriQuant")
-st.caption("Malawian Macroeconomic Data Intelligence Platform")
+st.markdown(
+    """
+    <div style="
+        background: linear-gradient(90deg, #E8720C 0%, #F4A83D 100%);
+        padding: 28px 32px;
+        border-radius: 10px;
+        margin-bottom: 24px;
+    ">
+        <h1 style="color: white; margin: 0; font-size: 2.3rem;">
+            🌍 AfriQuant
+        </h1>
+        <p style="color: #FDF1E6; margin: 4px 0 0 0; font-size: 1.05rem;">
+            Malawian Macroeconomic Data Intelligence Platform
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.warning(
     "Showing placeholder data (not real economic figures) until real "
