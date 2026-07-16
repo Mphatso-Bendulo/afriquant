@@ -1,47 +1,50 @@
 """
 app.py
 ------
-AfriQuant Phase 3: first interactive dashboard.
-Reads data/output/master.csv (produced by pipeline.py) and displays it.
-
-This does NOT recompute anything. It only reads and displays.
-If a number looks wrong here, the bug is in pipeline.py, not here.
+AfriQuant Phase 4: dashboard reading from SQLite (data/output/afriquant.db).
+Produced by pipeline.py -> database.py. This file only reads and displays.
 
 Run this from the project's root folder:
     streamlit run app.py
 """
 
 import pandas as pd
+import sqlite3
 import streamlit as st
 import os
 
-MASTER_FILE = "data/output/master.csv"
+DB_FILE = "data/output/afriquant.db"
 
 st.set_page_config(page_title="AfriQuant", layout="wide")
 
 
 @st.cache_data
 def load_master() -> pd.DataFrame:
-    if not os.path.exists(MASTER_FILE):
+    if not os.path.exists(DB_FILE):
         st.error(
-            f"Can't find {MASTER_FILE}. Run `python pipeline.py` first "
-            f"to generate it."
+            f"Can't find {DB_FILE}. Run `python pipeline.py` then "
+            f"`python database.py` first."
         )
         st.stop()
-    df = pd.read_csv(MASTER_FILE, parse_dates=["date"])
+    conn = sqlite3.connect(DB_FILE)
+    query = """
+        SELECT o.date, o.indicator, i.indicator_name, i.unit,
+               o.value, o.mom_change, o.yoy_change, o.rolling_3m_avg
+        FROM observations o
+        JOIN indicators i ON o.indicator = i.indicator
+    """
+    df = pd.read_sql_query(query, conn, parse_dates=["date"])
+    conn.close()
     return df
 
 
 def latest_snapshot(df: pd.DataFrame) -> pd.DataFrame:
-    """One row per indicator: its most recent value and mom_change."""
     latest = df.sort_values("date").groupby("indicator").tail(1)
     return latest[["indicator_name", "unit", "date", "value", "mom_change"]]
 
 
-# ---------- Load data ----------
 master = load_master()
 
-# ---------- Header ----------
 st.markdown(
     """
     <div style="
@@ -50,9 +53,7 @@ st.markdown(
         border-radius: 10px;
         margin-bottom: 24px;
     ">
-        <h1 style="color: white; margin: 0; font-size: 2.3rem;">
-            🌍 AfriQuant
-        </h1>
+        <h1 style="color: white; margin: 0; font-size: 2.3rem;">🌍 AfriQuant</h1>
         <p style="color: #FDF1E6; margin: 4px 0 0 0; font-size: 1.05rem;">
             Malawian Macroeconomic Data Intelligence Platform
         </p>
@@ -61,44 +62,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.warning(
-    "Showing placeholder data (not real economic figures) until real "
-    "data replaces the sample files in data/raw/.",
-    icon="⚠️",
-)
-
-# ---------- Section 1: Snapshot of all 8 indicators ----------
 st.subheader("Latest Snapshot")
-
 snapshot = latest_snapshot(master)
-
 cols = st.columns(4)
 for i, row in enumerate(snapshot.itertuples()):
     col = cols[i % 4]
-    change_text = (
-        f"{row.mom_change:+.2f}% MoM" if pd.notna(row.mom_change) else "—"
-    )
-    col.metric(
-        label=f"{row.indicator_name} ({row.unit})",
-        value=f"{row.value:,.2f}",
-        delta=change_text,
-    )
+    change_text = f"{row.mom_change:+.2f}% MoM" if pd.notna(row.mom_change) else "—"
+    col.metric(label=f"{row.indicator_name} ({row.unit})", value=f"{row.value:,.2f}", delta=change_text)
 
 st.divider()
 
-# ---------- Section 2: Drill into one indicator ----------
 st.subheader("Indicator History")
-
 indicator_names = sorted(master["indicator_name"].unique())
 choice = st.selectbox("Choose an indicator", indicator_names)
-
 detail = master[master["indicator_name"] == choice].sort_values("date")
 
 left, right = st.columns([2, 1])
-
 with left:
     st.line_chart(detail.set_index("date")[["value", "rolling_3m_avg"]])
-
 with right:
     st.write(f"**Unit:** {detail['unit'].iloc[0]}")
     st.write(f"**Latest value:** {detail['value'].iloc[-1]:,.2f}")
